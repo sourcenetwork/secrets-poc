@@ -1,0 +1,37 @@
+syntax = "proto3";
+package pb;
+
+// Typed DKG packets from github.com/dedis/kyber/share/dkg/pederson
+
+message DexPacket {
+    DKGDeal deal = 1;
+}
+
+message DKGDeal {
+    uint32 index = 1;
+    IssuedDeal IssuedDeal = 2;
+    bytes signature = 3;
+}
+
+message IssuedDeal {
+    bytes DHKey = 1;
+    bytes signature = 2;
+    bytes nonce = 3;
+    bytes cipher = 4;
+}
+
+message ResponsePacket {
+    DKGResponse response = 1;
+}
+
+message DKGResponse {
+    uint32 index = 1;
+    IssuedResponse IssuedResponse = 2;
+}
+
+message IssuedResponse {
+    bytes sessionID = 1;
+    uint32 index = 2;
+    bool status = 3;
+    bytes signature = 4;
+}
