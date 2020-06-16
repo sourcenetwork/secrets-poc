@@ -12,6 +12,25 @@ type DealPacket struct {
 	Deal *dkgp.Deal
 }
 
+type packet interface {
+	Bytes() ([]byte, error)
+}
+
+func (dp DealPacket) FromProto(deal *pb.DKGDeal) DealPacket {
+	return DealPacket{
+		Deal: &dkgp.Deal{
+			Index: deal.Index,
+			Deal: &vss.EncryptedDeal{
+				DHKey:     deal.IssuedDeal.DHKey,
+				Signature: deal.IssuedDeal.Signature,
+				Nonce:     deal.IssuedDeal.Nonce,
+				Cipher:    deal.IssuedDeal.Cipher,
+			},
+			Signature: deal.Signature,
+		},
+	}
+}
+
 // Read a serialized proto.DKGResponse message, return a ResponsePacket
 func (dp DealPacket) Read(buf []byte) (DealPacket, error) {
 	deal := &pb.DKGDeal{}
@@ -33,7 +52,7 @@ func (dp DealPacket) Read(buf []byte) (DealPacket, error) {
 }
 
 // Write a ResponsePacket into a serialized proto.DKGResponse message
-func (dp DealPacket) Write() ([]byte, error) {
+func (dp DealPacket) Bytes() ([]byte, error) {
 	deal := &pb.DKGDeal{
 		Index: dp.Deal.Index,
 		IssuedDeal: &pb.IssuedDeal{
@@ -70,8 +89,22 @@ func (rp ResponsePacket) Read(buf []byte) (ResponsePacket, error) {
 	}, nil
 }
 
+func (rp ResponsePacket) FromProto(resp *pb.DKGResponse) ResponsePacket {
+	return ResponsePacket{
+		Response: &dkgp.Response{
+			Index: resp.Index,
+			Response: &vss.Response{
+				SessionID: resp.IssuedResponse.SessionID,
+				Index:     resp.IssuedResponse.Index,
+				Status:    resp.IssuedResponse.Status,
+				Signature: resp.IssuedResponse.Signature,
+			},
+		},
+	}
+}
+
 // Write a ResponsePacket into a serialized proto.DKGResponse message
-func (rp ResponsePacket) Write() ([]byte, error) {
+func (rp ResponsePacket) Bytes() ([]byte, error) {
 	resp := &pb.DKGResponse{
 		Index: rp.Response.Index,
 		IssuedResponse: &pb.IssuedResponse{
