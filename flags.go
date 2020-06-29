@@ -8,6 +8,10 @@ import (
 	maddr "github.com/multiformats/go-multiaddr"
 )
 
+var (
+	DKGProtocolID = "/secrets/dkg/0.1.0"
+)
+
 // A new type we need for writing a custom flag parser
 type addrList []maddr.Multiaddr
 
@@ -44,6 +48,15 @@ type keystoreFile struct {
 	ID         string `json:"ID"`
 }
 
+type peerFile struct {
+	Peers []Peer `json:"peers"`
+}
+
+type Peer struct {
+	Address string
+	ID      string
+}
+
 type Config struct {
 	RendezvousString string
 	BootstrapPeers   addrList
@@ -59,9 +72,9 @@ func ParseFlags() (Config, error) {
 		"Unique string to identify group of nodes. Share this with your friends to let them connect with you")
 	flag.Var(&config.BootstrapPeers, "peer", "Adds a peer multiaddress to the bootstrap list")
 	flag.Var(&config.ListenAddresses, "listen", "Adds a multiaddress to the listen list")
-	flag.StringVar(&config.ProtocolID, "pid", "/secrets/0.1.0", "Sets a protocol id for stream headers")
+	flag.StringVar(&config.ProtocolID, "pid", DKGProtocolID, "Sets a protocol id for stream headers")
 	flag.StringVar(&config.KeystorePath, "keystore", "./ks0.json", "Specify a keystore file")
-	flag.StringVar(&config.PeersPath, "peers", "./peers.json", "Peers to create a Secret Ring with"
+	flag.StringVar(&config.PeersPath, "peers", "./peers.json", "Peers to create a Secret Ring with")
 	flag.Parse()
 
 	if len(config.BootstrapPeers) == 0 {
