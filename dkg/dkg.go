@@ -5,9 +5,12 @@ import (
 	"sync"
 
 	"go.dedis.ch/kyber/v3"
+	"go.dedis.ch/kyber/v3/group/edwards25519"
 	dkgp "go.dedis.ch/kyber/v3/share/dkg/pedersen"
 	"go.dedis.ch/kyber/v3/suites"
 
+	"github.com/libp2p/go-eventbus"
+	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/event"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -46,18 +49,96 @@ type DKG struct {
 	deals map[int]*dkgp.Deal
 
 	responses      []*dkgp.Response
-	respBufferLock sync.Mutex
+	respBufferLock *sync.Mutex
 	respBus        event.Bus
 	respEmitter    event.Emitter
 	respSub        event.Subscription
 }
 
+func publicKeyToEdwards25519KyberPoint(pubkey []byte) kyber.Point {
+	suite := edwards25519.NewBlakeSHA256Ed25519()
+	point := suite.Point()
+	point.UnmarshalBinary(pubkey)
+	return point
+}
+
+func privateKeyToEdwards25519KyberPoint(priv []byte) kyber.Scalar {
+	suite := edwards25519.NewBlakeSHA256Ed25519()
+	scalar := suite.Scalar()
+	scalar.UnmarshalBinary(priv)
+	return scalar
+}
+
+func NewDKG(privateKey crypto.PrivKey, peers []peer.ID, threshold int) (*DKG, error) {
+	// dkg := &DKG{}
+	respBus := eventbus.NewBus()
+	respEmitter, err := respBus.Emitter(new(ResponsePacket))
+	if err != nil {
+		return nil, err
+	}
+	respSub, err := respBus.Subscribe(new(ResponsePacket), eventbus.BufSize(len(peers)))
+	if err != nil {
+		return nil, err
+	}
+
+	// build peer kyber points
+	points := make([]kyber.Point, len(peers))
+	for i, pid := range peers {
+		pubkey, err := pid.ExtractPublicKey()
+		if err != nil {
+			return nil, err
+		}
+		pubBytes, err := pubkey.Raw()
+		if err != nil {
+			return nil, err
+		}
+		points[i] = publicKeyToEdwards25519KyberPoint(pubBytes)
+	}
+
+	// priv key to Kyber Scalar
+	privBytes, err := privateKey.Raw()
+	if err != nil {
+		return nil, err
+	}
+	scalar := privateKeyToEdwards25519KyberPoint(privBytes)
+
+	// build EC suite and pederson DKG
+	suite := edwards25519.NewBlakeSHA256Ed25519()
+	tdkg, err := dkgp.NewDistKeyGenerator(suite, scalar, points, threshold)
+	if err != nil {
+		return nil, err
+	}
+
+	return &DKG{
+		dkg:         tdkg,
+		suite:       suite,
+		points:      points,
+		numNodes:    len(peers),
+		responses:   make([]*dkgp.Response, len(peers)),
+		threshold:   threshold,
+		initialized: false,
+		respBus:     respBus,
+		respEmitter: respEmitter,
+		respSub:     respSub,
+	}, nil
+}
+
 func (dkg DKG) inPeerset(p peer.ID) bool {
-	return false // todo
+	for _, peer := range dkg.nodes {
+		if string(p) == string(peer.id) {
+			return true
+		}
+	}
+	return false
 }
 
 func (dkg DKG) peerIndex(p peer.ID) int {
-	return 0
+	for i, peer := range dkg.nodes {
+		if string(p) == string(peer.id) {
+			return i
+		}
+	}
+	return -1
 }
 
 func (d *DKG) Certified() bool {
@@ -101,7 +182,7 @@ func (d *DKG) HandleDeal(deal *dkgp.Deal) error {
 	}
 	// broadcast resp to all nodes
 	d.responses[resp.Index] = resp
-	respPacket := ResponsePacket{Response: resp}
+	respPacket := &ResponsePacket{Response: resp}
 	d.respEmitter.Emit(respPacket)
 
 	// log.Info().Msg("Broadcasting deal response to all peers")

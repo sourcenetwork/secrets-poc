@@ -11,6 +11,8 @@ import (
 	"os"
 	"sync"
 
+	"github.com/sourcenetwork/secrets-poc/dkg"
+
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/network"
@@ -121,6 +123,35 @@ func main() {
 		panic(err)
 	}
 
+	// extract peers from peers.json
+	buf, err = ioutil.ReadFile(config.PeersPath)
+	if err != nil {
+		panic(err)
+	}
+	var pFile peerFile
+	err = json.Unmarshal(buf, &pFile)
+	if err != nil {
+		panic(err)
+	}
+	peers := make([]peer.ID, len(pFile.Peers))
+	for i, p := range pFile.Peers {
+		var err error
+		peers[i], err = peer.IDFromString(p.ID)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	// Build DKG Instance
+	DKG, err := dkg.NewDKG(priv, peers, 2)
+	if err != nil {
+		panic(err)
+	}
+	err = DKG.Start()
+	if err != nil {
+		panic(err)
+	}
+
 	// libp2p.New constructs a new libp2p Host. Other options can be added
 	// here.
 	host, err := libp2p.New(ctx,
@@ -135,7 +166,7 @@ func main() {
 
 	// Set a function as stream handler. This function is called when a peer
 	// initiates a connection and starts a stream with this peer.
-	host.SetStreamHandler(protocol.ID(config.ProtocolID), handleStream)
+	host.SetStreamHandler(protocol.ID(config.ProtocolID), DKG.ProtocolHandler)
 
 	// Start a DHT, for use in peer discovery. We can't just make a new DHT
 	// client because we want each peer to maintain its own local copy of the
@@ -198,10 +229,7 @@ func main() {
 			logger.Warning("Connection failed:", err)
 			continue
 		} else {
-			rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
-
-			go writeData(rw)
-			go readData(rw)
+			DKG.HandlePeerStream(peer.ID, stream)
 		}
 
 		logger.Info("Connected to:", peer)
