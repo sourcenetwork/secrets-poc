@@ -1,7 +1,9 @@
 package dkg
 
 import (
+	"encoding/hex"
 	"errors"
+	"fmt"
 	"sync"
 
 	"go.dedis.ch/kyber/v3"
@@ -92,18 +94,23 @@ func NewDKG(privateKey crypto.PrivKey, peers []peer.ID, threshold int) (*DKG, er
 		if err != nil {
 			return nil, err
 		}
+		fmt.Println("Peer Point Raw:", hex.EncodeToString(pubBytes))
 		points[i] = publicKeyToEdwards25519KyberPoint(pubBytes)
+		fmt.Println("Peer Point Kyber:", points[i].String())
 	}
 
 	// priv key to Kyber Scalar
+	suite := edwards25519.NewBlakeSHA256Ed25519()
 	privBytes, err := privateKey.Raw()
 	if err != nil {
 		return nil, err
 	}
-	scalar := privateKeyToEdwards25519KyberPoint(privBytes)
+	scalar := privateKeyToEdwards25519KyberPoint(privBytes[:32])
+	pub := suite.Point().Mul(scalar, nil)
+	fmt.Println("Self pub point:", pub.String())
 
 	// build EC suite and pederson DKG
-	suite := edwards25519.NewBlakeSHA256Ed25519()
+
 	tdkg, err := dkgp.NewDistKeyGenerator(suite, scalar, points, threshold)
 	if err != nil {
 		return nil, err

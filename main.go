@@ -136,7 +136,8 @@ func main() {
 	peers := make([]peer.ID, len(pFile.Peers))
 	for i, p := range pFile.Peers {
 		var err error
-		peers[i], err = peer.IDFromString(p.ID)
+		logger.Info("PeerID from peerFile:", string(p.ID))
+		peers[i], err = peer.IDB58Decode(p.ID)
 		if err != nil {
 			panic(err)
 		}
