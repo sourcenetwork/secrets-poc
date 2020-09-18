@@ -37,6 +37,8 @@ func (dkg *DKG) ProtocolHandler(stream network.Stream) {
 	dkg.HandlePeerStream(peerID, stream)
 }
 
+// HandlePeerStream is the protocol handler for all peers in a DKG
+// It is used for both incoming and outgoing peer streams
 func (dkg *DKG) HandlePeerStream(peerID peer.ID, stream network.Stream) {
 	if !dkg.inPeerset(peerID) {
 		stream.Close()
@@ -58,6 +60,7 @@ func (dkg *DKG) HandlePeerStream(peerID peer.ID, stream network.Stream) {
 	dkg.startPeerLoop(n)
 }
 
+// the main loop for the DKG
 func (dkg *DKG) startRootLoop() {
 	// save all emitted responses to a list
 	timer := time.Tick(time.Second * 1)
@@ -75,6 +78,7 @@ func (dkg *DKG) startRootLoop() {
 	}
 }
 
+// PeerLoop
 func (dkg *DKG) startPeerLoop(peer *node) {
 	// check for outstanding deal intended for this node
 	index := dkg.peerIndex(peer.id)
@@ -87,6 +91,11 @@ func (dkg *DKG) startPeerLoop(peer *node) {
 		}
 	}
 
+	// Loop to broadcast new response objects
+	// to this peer
+	// Initially we will lock the response array mutex
+	// so we can sync this node up, and then resume
+	// listening to the event bus
 	go func() {
 		// send outstanding responses
 		dkg.respBufferLock.Lock()
@@ -108,6 +117,8 @@ func (dkg *DKG) startPeerLoop(peer *node) {
 		}
 	}()
 
+	// Loop to recieve messages from the connected peer
+	// messages are protobuf encoded
 	for {
 		b, err := peer.reader.ReadMsg()
 		if err != nil {
